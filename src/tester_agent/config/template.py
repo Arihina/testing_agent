@@ -11,10 +11,13 @@ mode = "package"        # "package" | "diff"
 base_branch = "main"
 
 [generation]
-model = "gpt-4o-mini"
+model = "qwen2.5-coder:14b"   # имя модели в Ollama (`ollama list`)
+base_url = "http://localhost:11434/v1"   # OpenAI-совместимый endpoint
 temperature = 0.2
 max_repair_iterations = 3
 token_budget = 200000
+timeout_seconds = 120
+max_retries = 3
 
 [gates]
 min_coverage_delta = 0.0
