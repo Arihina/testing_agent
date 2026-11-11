@@ -17,16 +17,19 @@ class TargetsConfig(BaseModel):
 
 
 class GenerationConfig(BaseModel):
-    """Раздел `generation`: параметры LLM-генерации."""
+    """Раздел `generation`: параметры LLM-генерации (локальная Ollama)."""
 
-    model: str = "gpt-4o-mini"
+    model: str = "qwen2.5-coder:14b"
+    base_url: str = "http://localhost:11434/v1"  # OpenAI-совместимый endpoint Ollama
     temperature: float = 0.2
     max_repair_iterations: int = 3
     token_budget: int = 200_000
+    timeout_seconds: int = 120
+    max_retries: int = 3
 
 
 class GatesConfig(BaseModel):
-    """Раздел `gates`: пороги валидации (§3.2 Validation)."""
+    """Раздел `gates`: пороги валидации (Validation)."""
 
     min_coverage_delta: float = 0.0
     assertion_enabled: bool = True
@@ -36,7 +39,7 @@ class GatesConfig(BaseModel):
 
 
 class ExecutionConfig(BaseModel):
-    """Раздел `execution`: изоляция и таймауты (§6)."""
+    """Раздел `execution`: изоляция и таймауты."""
 
     timeout_seconds: int = 60
     isolation: Literal["subprocess", "container"] = "subprocess"
@@ -45,7 +48,7 @@ class ExecutionConfig(BaseModel):
 
 
 class LoadConfig(BaseModel):
-    """Раздел `load`: параметры нагрузочного прогона (§5)."""
+    """Раздел `load`: параметры нагрузочного прогона."""
 
     base_url: str = "http://localhost:8000"
     tool: Literal["wrk2", "k6"] = "k6"
