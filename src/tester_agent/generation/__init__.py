@@ -1,1 +1,7 @@
-"""Generation: LLM-слой — Gateway, Prompt Registry, Synthesizer'ы."""
+"""Generation: LLM-слой — Gateway, Prompt Registry, Synthesizer'ы (§3.2)."""
+
+from .gateway import LLMError, LLMGateway
+from .prompts import PromptRegistry
+from .synthesizer import TestSynthesizer
+
+__all__ = ["LLMError", "LLMGateway", "PromptRegistry", "TestSynthesizer"]
