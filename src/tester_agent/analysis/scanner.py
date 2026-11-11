@@ -21,22 +21,18 @@ class SourceScanner:
     """Собирает объявления функций/методов из Python-файлов."""
 
     def scan_package(self, path: str | Path) -> list[Target]:
-        """Сканировать все Python-файлы пакета (рекурсивно)."""
         root = Path(path)
-        return self._scan_files(self._python_files(root), root)
+        return self._scan_files(self._python_files(root))
 
     def scan_files(self, files: list[str | Path]) -> list[Target]:
-        """Сканировать явно переданные файлы (без привязки к корню пакета)."""
-        return self._scan_files([Path(f) for f in files], None)
+        return self._scan_files([Path(f) for f in files])
 
     def scan_git_diff(self, base_branch: str) -> list[Target]:
-        """Сканировать Python-файлы, изменённые относительно базовой ветки."""
         cmd = ["git", "diff", "--name-only", "--diff-filter=ACMR", base_branch]
         proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
         if proc.returncode != 0:
             return []
-        files = [line for line in proc.stdout.splitlines()
-                 if line.endswith(".py")]
+        files = [line for line in proc.stdout.splitlines() if line.endswith(".py")]
         return self.scan_files(files)
 
     def _python_files(self, root: Path) -> list[Path]:
@@ -51,7 +47,7 @@ class SourceScanner:
             files.append(p)
         return files
 
-    def _scan_files(self, files: list[Path], root: Path | None) -> list[Target]:
+    def _scan_files(self, files: list[Path]) -> list[Target]:
         targets: list[Target] = []
         for path in files:
             if not path.exists():
@@ -64,20 +60,22 @@ class SourceScanner:
                 tree = ast.parse(source, filename=str(path))
             except SyntaxError:
                 continue
-            module = self._module_name(path, root)
+            module = self._module_name(path)
             for func, class_name in iter_functions(tree):
-                targets.append(self._to_target(
-                    func, class_name, module, str(path)))
+                targets.append(self._to_target(func, class_name, module, str(path)))
         return targets
 
-    def _module_name(self, path: Path, root: Path | None) -> str:
-        if root is not None and root.is_dir():
-            rel = path.relative_to(root)
-        else:
-            rel = Path(path.name)
-        parts = list(rel.with_suffix("").parts)
-        if parts and parts[-1] == "__init__":
-            parts = parts[:-1]
+    @staticmethod
+    def _module_name(path: Path) -> str:
+        """Dotted-путь модуля: поднимаемся по пакетам (директориям с ``__init__.py``)."""
+        parts: list[str] = []
+        current = path.parent
+        while (current / "__init__.py").exists():
+            parts.append(current.name)
+            current = current.parent
+        parts.reverse()
+        if path.stem != "__init__":
+            parts.append(path.stem)
         return ".".join(parts)
 
     def _to_target(self, func, class_name: str | None, module: str, file_path: str) -> Target:
