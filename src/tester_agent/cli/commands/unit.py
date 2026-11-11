@@ -1,4 +1,4 @@
-"""Команда `unit`: генерация и доводка unit-тестов."""
+"""Команда `unit`: генерация и доводка unit-тестов (§4)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from rich.table import Table
 
 from ...analysis import CandidateFilter, ContextBuilder, SourceScanner
 from ...config.loader import load_config
+from ...generation import LLMError, LLMGateway, TestSynthesizer
+from ...infrastructure import ArtifactStore
 from ..app import app
 from ..exit_codes import EXIT_ENV_ERROR
 
@@ -20,12 +22,10 @@ console = Console()
 
 @app.command("unit")
 def unit(
-    path: str | None = typer.Argument(
-        None, help="Путь к пакету (иначе — из конфига targets)."),
-    diff: bool = typer.Option(
-        False, "--diff", help="Отбирать только объекты, изменённые относительно базовой ветки."),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Показать отобранные цели и план без вызова модели."),
+    path: str | None = typer.Argument(None, help="Путь к пакету (иначе — из конфига targets)."),
+    diff: bool = typer.Option(False, "--diff", help="Отбирать только объекты, изменённые относительно базовой ветки."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Показать отобранные цели и план без вызова модели."),
+    limit: int | None = typer.Option(None, "--limit", help="Обработать не более N целей."),
 ) -> None:
     """Сгенерировать и довести unit-тесты для функций и методов пакета."""
     config = load_config()
@@ -44,10 +44,44 @@ def unit(
             for target in targets:
                 rprint(f"\n--- ContextPackage: {target.name} ---")
                 rprint(builder.build(target).model_dump())
-    else:
-        typer.echo(f"Отобрано целей: {len(targets)}")
-        typer.echo(
-            "TODO (этапы 2–4): генерация и доводка тестов ещё не реализованы.")
+        return
+
+    if not targets:
+        typer.echo("Нет целей для генерации (все покрыты, тривиальны или уже приняты).")
+        return
+
+    if limit is not None:
+        targets = targets[:limit]
+
+    _generate(config, targets)
+
+
+def _generate(config, targets) -> None:
+    gateway = LLMGateway(
+        base_url=config.generation.base_url,
+        model=config.generation.model,
+        temperature=config.generation.temperature,
+        timeout_seconds=config.generation.timeout_seconds,
+        max_retries=config.generation.max_retries,
+        token_budget=config.generation.token_budget,
+        cache_path=Path(".testagent") / "cache" / "llm_cache.json",
+    )
+    artifacts = ArtifactStore()
+    run_dir = artifacts.create_run()
+    synthesizer = TestSynthesizer(gateway, artifact_store=artifacts)
+    builder = ContextBuilder()
+
+    typer.echo(f"Генерация для {len(targets)} целей (модель {config.generation.model})…")
+    for target in targets:
+        typer.echo(f"\n{'=' * 60}\n{target.name}\n{'=' * 60}")
+        try:
+            code = synthesizer.synthesize(builder.build(target))
+        except LLMError as exc:
+            typer.echo(f"Ошибка генерации: {exc}", err=True)
+            continue
+        artifacts.save_generated(target.name, code)
+        typer.echo(code)
+    typer.echo(f"\nАртефакты прогона: {run_dir}")
 
 
 def _collect_declarations(scanner, config, path, diff):
