@@ -85,3 +85,11 @@ class Candidate(BaseModel):
     iteration: int = 0
     passed: bool = False
     output: str = ""
+
+
+class Verdict(BaseModel):
+    """Решение валидатора: принят/отклонён, гейт, причина."""
+
+    accepted: bool
+    failed_gate: str | None = None
+    reason: str | None = None
