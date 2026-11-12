@@ -12,6 +12,14 @@ from .prompts import PromptRegistry
 _FENCE_RE = re.compile(r"```(?:python)?\s*(.*?)```", re.DOTALL)
 
 
+def extract_code(raw: str) -> str:
+    """Извлекает код из ответа модели, снимая markdown-ограждения."""
+    match = _FENCE_RE.search(raw)
+    if match:
+        return match.group(1).strip()
+    return raw.strip()
+
+
 class TestSynthesizer:
     """Превращает ContextPackage в исходник pytest-модуля через LLM."""
 
@@ -37,7 +45,7 @@ class TestSynthesizer:
         raw = self.gateway.complete(messages)
         if self.artifact_store is not None:
             self.artifact_store.save_prompt(messages, raw)
-        return self._extract_code(raw)
+        return extract_code(raw)
 
     @staticmethod
     def _render_context(package: ContextPackage) -> str:
@@ -48,6 +56,11 @@ class TestSynthesizer:
         ]
         if package.docstring:
             lines.append(f"Докстринг: {package.docstring}")
+
+        if package.target_source:
+            lines.append("")
+            lines.append("Тело целевой функции:")
+            lines.extend(f"  {ln}" for ln in package.target_source.splitlines())
 
         lines.append("")
         lines.append("Импорты модуля:")
@@ -90,10 +103,3 @@ class TestSynthesizer:
             lines.extend(f"  {ln}" for ln in package.test_style.splitlines())
 
         return "\n".join(lines)
-
-    @staticmethod
-    def _extract_code(raw: str) -> str:
-        match = _FENCE_RE.search(raw)
-        if match:
-            return match.group(1).strip()
-        return raw.strip()
