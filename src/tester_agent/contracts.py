@@ -31,12 +31,13 @@ class FunctionSnippet(BaseModel):
 
 
 class ContextPackage(BaseModel):
-    """Пакет контекста, уходящий в промпт (§3.3)."""
+    """Пакет контекста, уходящий в промпт."""
 
     module: str
     name: str
     signature: str
     docstring: str | None = None
+    target_source: str = ""
     imports: list[str] = Field(default_factory=list)
     called_functions: list[FunctionSnippet] = Field(default_factory=list)
     used_types: list[str] = Field(default_factory=list)
@@ -56,7 +57,7 @@ class EndpointParam(BaseModel):
 
 
 class Endpoint(BaseModel):
-    """Нормализованная ручка OpenAPI (§3.3)."""
+    """Нормализованная ручка OpenAPI."""
 
     method: str
     path: str
@@ -65,3 +66,22 @@ class Endpoint(BaseModel):
     request_body_schema: dict | None = None
     responses: dict[str, dict | None] = Field(default_factory=dict)
     requires_auth: bool = False
+
+
+class RunResult(BaseModel):
+    """Результат исполнения: статус, вывод, длительность."""
+
+    passed: bool
+    returncode: int
+    output: str
+    duration: float = 0.0
+
+
+class Candidate(BaseModel):
+    """Сгенерированный артефакт до вердикта."""
+
+    target: Target
+    source: str
+    iteration: int = 0
+    passed: bool = False
+    output: str = ""
