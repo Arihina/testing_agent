@@ -1,4 +1,4 @@
-"""Artifact Store: директория прогона runs/<timestamp>/ (§7)."""
+"""Artifact Store: директория прогона runs/<timestamp>/."""
 
 from __future__ import annotations
 
@@ -31,10 +31,22 @@ class ArtifactStore:
         (prompt_dir / f"{self._prompt_index:03d}_messages.json").write_text(
             json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        (prompt_dir / f"{self._prompt_index:03d}_response.txt").write_text(response, encoding="utf-8")
+        (prompt_dir /
+         f"{self._prompt_index:03d}_response.txt").write_text(response, encoding="utf-8")
 
-    def save_generated(self, name: str, code: str) -> None:
+    def write_test(self, name: str, code: str) -> Path:
+        """Записывает выполняемый тестовый файл (test_<name>.py) и возвращает путь."""
         if self.run_dir is None:
             self.create_run()
         safe_name = name.replace(".", "_")
-        (self.run_dir / "generated" / f"{safe_name}.py").write_text(code, encoding="utf-8")
+        test_file = self.run_dir / "generated" / f"test_{safe_name}.py"
+        test_file.write_text(code, encoding="utf-8")
+        return test_file
+
+    def save_generated(self, name: str, code: str) -> None:
+        """Сохраняет итоговый исходник теста для справки."""
+        if self.run_dir is None:
+            self.create_run()
+        safe_name = name.replace(".", "_")
+        (self.run_dir / "generated" /
+         f"{safe_name}.py").write_text(code, encoding="utf-8")
