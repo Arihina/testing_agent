@@ -36,6 +36,7 @@ class ContextBuilder:
             name=target.name,
             signature=target.signature,
             docstring=target.docstring,
+            target_source=ast.get_source_segment(source, func) or "",
             imports=self._collect_imports(tree),
             called_functions=self._called_functions(
                 tree, func, class_name, source),

@@ -13,6 +13,7 @@ from .astutil import (
     iter_functions,
     signature_hash,
 )
+from .paths import module_info
 
 _SKIP_PARTS = {"__pycache__", ".venv", "venv", ".git", "site-packages"}
 
@@ -60,23 +61,10 @@ class SourceScanner:
                 tree = ast.parse(source, filename=str(path))
             except SyntaxError:
                 continue
-            module = self._module_name(path)
+            module = module_info(path)[0]
             for func, class_name in iter_functions(tree):
                 targets.append(self._to_target(func, class_name, module, str(path)))
         return targets
-
-    @staticmethod
-    def _module_name(path: Path) -> str:
-        """Dotted-путь модуля: поднимаемся по пакетам (директориям с ``__init__.py``)."""
-        parts: list[str] = []
-        current = path.parent
-        while (current / "__init__.py").exists():
-            parts.append(current.name)
-            current = current.parent
-        parts.reverse()
-        if path.stem != "__init__":
-            parts.append(path.stem)
-        return ".".join(parts)
 
     def _to_target(self, func, class_name: str | None, module: str, file_path: str) -> Target:
         name = f"{class_name}.{func.name}" if class_name else func.name
