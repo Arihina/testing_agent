@@ -1,5 +1,7 @@
-"""Infrastructure: State Store, Artifact Store, Reporter (§3.2)."""
+"""Infrastructure: State Store, Artifact Store, Reporter."""
 
 from .artifacts import ArtifactStore
+from .reporter import Reporter
+from .state import StateStore
 
-__all__ = ["ArtifactStore"]
+__all__ = ["ArtifactStore", "Reporter", "StateStore"]
