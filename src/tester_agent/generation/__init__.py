@@ -1,4 +1,4 @@
-"""Generation: LLM-слой — Gateway, Prompt Registry, Synthesizer'ы (§3.2)."""
+"""Generation: LLM-слой — Gateway, Prompt Registry, Synthesizer'ы."""
 
 from .gateway import LLMError, LLMGateway
 from .prompts import PromptRegistry
