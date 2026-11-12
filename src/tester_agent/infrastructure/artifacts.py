@@ -50,3 +50,23 @@ class ArtifactStore:
         safe_name = name.replace(".", "_")
         (self.run_dir / "generated" /
          f"{safe_name}.py").write_text(code, encoding="utf-8")
+
+    def save_accepted(self, name: str, code: str) -> Path:
+        """Сохраняет принятый тест в runs/<ts>/accepted/."""
+        return self._save_into("accepted", name, code)
+
+    def save_rejected(self, name: str, code: str, reason: str) -> Path:
+        """Сохраняет отклонённый тест и причину в runs/<ts>/rejected/."""
+        path = self._save_into("rejected", name, code)
+        path.with_suffix(".reason.txt").write_text(reason, encoding="utf-8")
+        return path
+
+    def _save_into(self, subdir: str, name: str, code: str) -> Path:
+        if self.run_dir is None:
+            self.create_run()
+        safe_name = name.replace(".", "_")
+        target_dir = self.run_dir / subdir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        path = target_dir / f"{safe_name}.py"
+        path.write_text(code, encoding="utf-8")
+        return path
