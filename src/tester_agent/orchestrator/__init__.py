@@ -1,5 +1,5 @@
 """Orchestrator: сценарии unit/load как конечные автоматы, лимиты, состояние."""
 
-from .unit import UnitScenario
+from .unit import UnitOutcome, UnitScenario
 
-__all__ = ["UnitScenario"]
+__all__ = ["UnitOutcome", "UnitScenario"]
