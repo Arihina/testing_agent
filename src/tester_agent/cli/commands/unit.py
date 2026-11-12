@@ -1,4 +1,4 @@
-"""Команда `unit`: генерация и доводка unit-тестов (§4)."""
+"""Команда `unit`: генерация и доводка unit-тестов."""
 
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ from rich.table import Table
 
 from ...analysis import CandidateFilter, ContextBuilder, SourceScanner
 from ...config.loader import load_config
-from ...generation import LLMError, LLMGateway, TestSynthesizer
+from ...execution import PytestAdapter, SandboxRunner
+from ...generation import LLMError, LLMGateway, RepairSynthesizer, TestSynthesizer
 from ...infrastructure import ArtifactStore
+from ...orchestrator import UnitScenario
 from ..app import app
 from ..exit_codes import EXIT_ENV_ERROR
 
@@ -57,6 +59,7 @@ def unit(
 
 
 def _generate(config, targets) -> None:
+    sandbox = SandboxRunner(timeout_seconds=config.execution.timeout_seconds)
     gateway = LLMGateway(
         base_url=config.generation.base_url,
         model=config.generation.model,
@@ -68,19 +71,31 @@ def _generate(config, targets) -> None:
     )
     artifacts = ArtifactStore()
     run_dir = artifacts.create_run()
-    synthesizer = TestSynthesizer(gateway, artifact_store=artifacts)
-    builder = ContextBuilder()
+    scenario = UnitScenario(
+        builder=ContextBuilder(),
+        synthesizer=TestSynthesizer(gateway, artifact_store=artifacts),
+        repairer=RepairSynthesizer(gateway, artifact_store=artifacts),
+        adapter=PytestAdapter(sandbox),
+        artifacts=artifacts,
+        max_repair_iterations=config.generation.max_repair_iterations,
+    )
 
-    typer.echo(f"Генерация для {len(targets)} целей (модель {config.generation.model})…")
+    typer.echo(f"Генерация и прогон для {len(targets)} целей (модель {config.generation.model})…")
     for target in targets:
         typer.echo(f"\n{'=' * 60}\n{target.name}\n{'=' * 60}")
         try:
-            code = synthesizer.synthesize(builder.build(target))
+            candidate = scenario.run(target)
         except LLMError as exc:
             typer.echo(f"Ошибка генерации: {exc}", err=True)
             continue
-        artifacts.save_generated(target.name, code)
-        typer.echo(code)
+        artifacts.save_generated(target.name, candidate.source)
+        status = "PASS" if candidate.passed else "FAIL"
+        typer.echo(f"[{status}] итераций: {candidate.iteration}")
+        if candidate.passed:
+            typer.echo(candidate.source)
+        else:
+            lines = candidate.output.strip().splitlines()
+            typer.echo("\n".join(lines[-15:]) if lines else "(нет вывода)")
     typer.echo(f"\nАртефакты прогона: {run_dir}")
 
 
