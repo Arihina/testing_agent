@@ -93,3 +93,24 @@ class Verdict(BaseModel):
     accepted: bool
     failed_gate: str | None = None
     reason: str | None = None
+
+
+class RequestSpec(BaseModel):
+    """Конкретный HTTP-запрос для нагрузки."""
+
+    method: str
+    path: str
+    query: dict = Field(default_factory=dict)
+    json_body: dict | None = None
+
+
+class LoadMetrics(BaseModel):
+    """Метрики нагрузочного прогона."""
+
+    rps: float = 0.0
+    latency_p50: float = 0.0
+    latency_p90: float = 0.0
+    latency_p99: float = 0.0
+    error_rate: float = 0.0
+    duration: float = 0.0
+    machine_id: str = ""
