@@ -1,8 +1,7 @@
-"""Команда `unit`: генерация и доводка unit-тестов."""
+"""Команда `unit`: генерация, доводка и валидация unit-тестов (§4)."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import typer
@@ -14,8 +13,9 @@ from ...analysis import CandidateFilter, ContextBuilder, SourceScanner
 from ...config.loader import load_config
 from ...execution import PytestAdapter, SandboxRunner
 from ...generation import LLMError, LLMGateway, RepairSynthesizer, TestSynthesizer
-from ...infrastructure import ArtifactStore
+from ...infrastructure import ArtifactStore, Reporter, StateStore
 from ...orchestrator import UnitScenario
+from ...validation import Validator
 from ..app import app
 from ..exit_codes import EXIT_ENV_ERROR
 
@@ -28,15 +28,18 @@ def unit(
     diff: bool = typer.Option(False, "--diff", help="Отбирать только объекты, изменённые относительно базовой ветки."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Показать отобранные цели и план без вызова модели."),
     limit: int | None = typer.Option(None, "--limit", help="Обработать не более N целей."),
+    model: str | None = typer.Option(None, "--model", help="Модель Ollama: qwen2.5-coder:14b | qwen3-coder:30b."),
 ) -> None:
-    """Сгенерировать и довести unit-тесты для функций и методов пакета."""
+    """Сгенерировать, довести и провалидировать unit-тесты."""
     config = load_config()
+    if model is not None:
+        config.generation.model = model
+
     scanner = SourceScanner()
     declarations = _collect_declarations(scanner, config, path, diff)
+    state_store = StateStore()
     targets = CandidateFilter().filter(
-        declarations,
-        coverage=None,
-        known_hashes=_accepted_hashes(),
+        declarations, coverage=None, known_hashes=state_store.accepted_hashes()
     )
 
     if dry_run:
@@ -49,17 +52,18 @@ def unit(
         return
 
     if not targets:
-        typer.echo("Нет целей для генерации (все покрыты, тривиальны или уже приняты).")
+        typer.echo("Нет целей (все покрыты, тривиальны или уже приняты).")
         return
 
     if limit is not None:
         targets = targets[:limit]
 
-    _generate(config, targets)
+    _generate(config, targets, state_store)
 
 
-def _generate(config, targets) -> None:
+def _generate(config, targets, state_store) -> None:
     sandbox = SandboxRunner(timeout_seconds=config.execution.timeout_seconds)
+    adapter = PytestAdapter(sandbox)
     gateway = LLMGateway(
         base_url=config.generation.base_url,
         model=config.generation.model,
@@ -75,28 +79,41 @@ def _generate(config, targets) -> None:
         builder=ContextBuilder(),
         synthesizer=TestSynthesizer(gateway, artifact_store=artifacts),
         repairer=RepairSynthesizer(gateway, artifact_store=artifacts),
-        adapter=PytestAdapter(sandbox),
+        adapter=adapter,
         artifacts=artifacts,
+        validator=Validator(adapter, config.gates),
+        state_store=state_store,
         max_repair_iterations=config.generation.max_repair_iterations,
     )
 
     typer.echo(f"Генерация и прогон для {len(targets)} целей (модель {config.generation.model})…")
+    outcomes = []
     for target in targets:
         typer.echo(f"\n{'=' * 60}\n{target.name}\n{'=' * 60}")
         try:
-            candidate = scenario.run(target)
+            outcome = scenario.run(target)
         except LLMError as exc:
             typer.echo(f"Ошибка генерации: {exc}", err=True)
             continue
-        artifacts.save_generated(target.name, candidate.source)
-        status = "PASS" if candidate.passed else "FAIL"
-        typer.echo(f"[{status}] итераций: {candidate.iteration}")
-        if candidate.passed:
-            typer.echo(candidate.source)
-        else:
-            lines = candidate.output.strip().splitlines()
-            typer.echo("\n".join(lines[-15:]) if lines else "(нет вывода)")
-    typer.echo(f"\nАртефакты прогона: {run_dir}")
+        outcomes.append(outcome)
+        _print_outcome(outcome)
+
+    Reporter(run_dir).write_report(outcomes)
+    typer.echo(f"\nОтчёт: {run_dir}/report.json, {run_dir}/report.md")
+
+
+def _print_outcome(outcome) -> None:
+    verdict = outcome.verdict
+    if verdict and verdict.accepted:
+        typer.echo(f"[ACCEPT] итераций: {outcome.iteration}")
+        typer.echo(outcome.source)
+    else:
+        gate = verdict.failed_gate if verdict else "?"
+        reason = verdict.reason if verdict else ""
+        typer.echo(f"[REJECT] {gate}: {reason} (итераций: {outcome.iteration})")
+        if outcome.passed is False:
+            lines = outcome.output.strip().splitlines()
+            typer.echo("\n".join(lines[-12:]) if lines else "")
 
 
 def _collect_declarations(scanner, config, path, diff):
@@ -114,22 +131,6 @@ def _collect_declarations(scanner, config, path, diff):
         err=True,
     )
     raise typer.Exit(EXIT_ENV_ERROR)
-
-
-def _accepted_hashes() -> frozenset[str]:
-    """Хеши сигнатур уже принятых тестов.
-
-    Временная реализация: читает .testagent/state.json напрямую.
-    Будет заменена на State Store (этап 4).
-    """
-    state_path = Path(".testagent") / "state.json"
-    if not state_path.exists():
-        return frozenset()
-    try:
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return frozenset()
-    return frozenset((data.get("accepted") or {}).keys())
 
 
 def _print_targets(targets) -> None:
