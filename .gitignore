@@ -6,3 +6,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .testagent/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
