@@ -20,7 +20,7 @@ class UnitOutcome:
 
 
 class UnitScenario:
-    """Реализует сценарий unit как конечный автомат (§3.2, §4)."""
+    """Реализует сценарий unit как конечный автомат."""
 
     def __init__(
         self,
@@ -32,6 +32,7 @@ class UnitScenario:
         validator,
         state_store,
         max_repair_iterations: int = 3,
+        tests_dir: str | None = None,
     ) -> None:
         self.builder = builder
         self.synthesizer = synthesizer
@@ -41,6 +42,7 @@ class UnitScenario:
         self.validator = validator
         self.state_store = state_store
         self.max_repair_iterations = max_repair_iterations
+        self.tests_dir = tests_dir
 
     def run(self, target: Target) -> UnitOutcome:
         package = self.builder.build(target)
@@ -93,8 +95,8 @@ class UnitScenario:
     def _import_root(target: Target) -> Path:
         return module_info(target.file_path)[1]
 
-    @staticmethod
-    def _write_to_tree(target: Target, source: str) -> None:
+    def _write_to_tree(self, target: Target, source: str) -> None:
         safe_name = target.name.replace(".", "_")
-        test_path = Path(target.file_path).parent / f"test_{safe_name}.py"
-        test_path.write_text(source, encoding="utf-8")
+        target_dir = Path(self.tests_dir) if self.tests_dir else Path(target.file_path).parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / f"test_{safe_name}.py").write_text(source, encoding="utf-8")
