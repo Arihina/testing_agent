@@ -1,4 +1,4 @@
-"""Spec Reader: чтение OpenAPI-спецификации → список Endpoint."""
+"""Spec Reader: чтение OpenAPI-спецификации → список Endpoint (§3.2, §5)."""
 
 from __future__ import annotations
 
@@ -9,22 +9,27 @@ import httpx
 
 from ..contracts import Endpoint, EndpointParam
 
-_HTTP_METHODS = {"get", "post", "put", "patch",
-                 "delete", "head", "options", "trace"}
+_HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 
 
 class SpecReader:
     """Нормализует OpenAPI 3.x в список эндпоинтов."""
 
     def read(self, source: str | Path) -> list[Endpoint]:
-        """Читает спецификацию из файла (Path/строка пути) или URL."""
+        return self.parse(self._load(source))
+
+    def read_full(self, source: str | Path) -> tuple[list[Endpoint], dict]:
+        """Возвращает (эндпоинты, схемы из components/schemas)."""
+        data = self._load(source)
+        schemas = (data.get("components") or {}).get("schemas") or {}
+        return self.parse(data), schemas
+
+    def _load(self, source: str | Path) -> dict:
         if isinstance(source, str) and source.startswith(("http://", "https://")):
             resp = httpx.get(source, follow_redirects=True, timeout=30.0)
             resp.raise_for_status()
-            data = resp.json()
-        else:
-            data = json.loads(Path(source).read_text(encoding="utf-8"))
-        return self.parse(data)
+            return resp.json()
+        return json.loads(Path(source).read_text(encoding="utf-8"))
 
     def parse(self, data: dict) -> list[Endpoint]:
         endpoints: list[Endpoint] = []
@@ -43,12 +48,10 @@ class SpecReader:
                     self._param(p) for p in list(common_params) + list(operation.get("parameters") or [])
                 ]
                 body = operation.get("requestBody") or {}
-                app_json = (body.get("content") or {}).get(
-                    "application/json") or {}
+                app_json = (body.get("content") or {}).get("application/json") or {}
                 endpoint.request_body_schema = app_json.get("schema")
                 endpoint.responses = self._responses(operation)
-                endpoint.requires_auth = bool(
-                    operation.get("security") or global_security)
+                endpoint.requires_auth = bool(operation.get("security") or global_security)
                 endpoints.append(endpoint)
         return endpoints
 
@@ -68,7 +71,6 @@ class SpecReader:
     def _responses(operation: dict) -> dict[str, dict | None]:
         result: dict[str, dict | None] = {}
         for status, response in (operation.get("responses") or {}).items():
-            app_json = ((response or {}).get("content")
-                        or {}).get("application/json") or {}
+            app_json = ((response or {}).get("content") or {}).get("application/json") or {}
             result[status] = app_json.get("schema")
         return result
