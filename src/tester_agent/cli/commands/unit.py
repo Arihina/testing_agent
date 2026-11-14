@@ -1,4 +1,4 @@
-"""Команда `unit`: генерация, доводка и валидация unit-тестов (§4)."""
+"""Команда `unit`: генерация, доводка и валидация unit-тестов."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ def unit(
     dry_run: bool = typer.Option(False, "--dry-run", help="Показать отобранные цели и план без вызова модели."),
     limit: int | None = typer.Option(None, "--limit", help="Обработать не более N целей."),
     model: str | None = typer.Option(None, "--model", help="Модель Ollama: qwen2.5-coder:14b | qwen3-coder:30b."),
+    tests_dir: str | None = typer.Option(None, "--tests-dir", help="Директория для принятых тестов (по умолчанию — рядом с исходником)."),
 ) -> None:
     """Сгенерировать, довести и провалидировать unit-тесты."""
     config = load_config()
@@ -58,10 +59,10 @@ def unit(
     if limit is not None:
         targets = targets[:limit]
 
-    _generate(config, targets, state_store)
+    _generate(config, targets, state_store, tests_dir)
 
 
-def _generate(config, targets, state_store) -> None:
+def _generate(config, targets, state_store, tests_dir: str | None = None) -> None:
     sandbox = SandboxRunner(timeout_seconds=config.execution.timeout_seconds)
     adapter = PytestAdapter(sandbox)
     gateway = LLMGateway(
@@ -84,6 +85,7 @@ def _generate(config, targets, state_store) -> None:
         validator=Validator(adapter, config.gates),
         state_store=state_store,
         max_repair_iterations=config.generation.max_repair_iterations,
+        tests_dir=tests_dir,
     )
 
     typer.echo(f"Генерация и прогон для {len(targets)} целей (модель {config.generation.model})…")
