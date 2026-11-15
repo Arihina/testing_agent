@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich import print as rprint
 
 from ...analysis import SpecReader
 from ...config.loader import load_config
 from ...execution import LoadRunner, LoadScriptBuilder, SmokeProber
-from ...generation import PayloadSynthesizer
+from ...generation import LLMError, LLMGateway, PayloadSynthesizer, VerdictWriter
 from ...infrastructure import ArtifactStore, BaselineStore, machine_id
 from ...validation import check_regression
 from ..app import app
@@ -64,6 +66,22 @@ def load(
 
     rprint(metrics.model_dump())
     verdict = check_regression(metrics, previous, config.load.regression_threshold)
+
+    try:
+        gateway = LLMGateway(
+            base_url=config.generation.base_url,
+            model=config.generation.model,
+            temperature=config.generation.temperature,
+            timeout_seconds=config.generation.timeout_seconds,
+            max_retries=config.generation.max_retries,
+            token_budget=config.generation.token_budget,
+            cache_path=Path(".testagent") / "cache" / "llm_cache.json",
+        )
+        hypothesis = VerdictWriter(gateway, artifact_store=artifacts).write(metrics, previous)
+        typer.echo(f"\nИнтерпретация:\n{hypothesis}")
+    except LLMError as exc:
+        typer.echo(f"\n(интерпретация недоступна: {exc})")
+
     if not verdict.accepted:
         typer.echo(f"Regression: {verdict.reason}", err=True)
         raise typer.Exit(EXIT_GATES_FAILED)
