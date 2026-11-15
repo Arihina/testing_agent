@@ -45,9 +45,32 @@ REPAIR_USER = """\
 {output}
 """
 
+LOAD_VERDICT_SYSTEM = """\
+Ты — эксперт по производительности backend-сервисов.
+Дай краткую интерпретацию результатов нагрузочного прогона.
+Правила:
+- 3–5 предложений, по делу.
+- Сравни с baseline, если он есть.
+- Выдвини гипотезы о причинах деградации latency (p50/p90/p99).
+- Не утверждай того, чего нет в метриках.
+"""
+
+LOAD_VERDICT_USER = """\
+Метрики текущего прогона:
+- RPS: {rps}
+- p50: {p50} ms
+- p90: {p90} ms
+- p99: {p99} ms
+- доля ошибок: {error_rate}
+
+Baseline (та же машина):
+{baseline}
+"""
+
 _REGISTRY: dict[tuple[str, int], tuple[str, str]] = {
     ("test_generation", 1): (TEST_GENERATION_SYSTEM, TEST_GENERATION_USER),
     ("test_repair", 1): (REPAIR_SYSTEM, REPAIR_USER),
+    ("load_verdict", 1): (LOAD_VERDICT_SYSTEM, LOAD_VERDICT_USER),
 }
 
 
