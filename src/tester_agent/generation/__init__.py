@@ -5,6 +5,7 @@ from .payload import PayloadSynthesizer
 from .prompts import PromptRegistry
 from .repair import RepairSynthesizer
 from .synthesizer import TestSynthesizer
+from .verdict import VerdictWriter
 
 __all__ = [
     "LLMError",
@@ -13,4 +14,5 @@ __all__ = [
     "PromptRegistry",
     "RepairSynthesizer",
     "TestSynthesizer",
+    "VerdictWriter",
 ]
