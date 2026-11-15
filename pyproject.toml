@@ -1,7 +1,7 @@
 [project]
 name = "tester-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "CLI-агент для автоматизации тестирования Python-бэкенда: генерация unit-тестов и нагрузочные профили по OpenAPI"
 readme = "README.md"
 authors = [
     { name = "Alena Kozlova", email = "alena.kozlova2004@mail.ru" }
